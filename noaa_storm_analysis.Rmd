@@ -1,0 +1,23 @@
+---
+title: "noaa_storm_analysis"
+author: "Daniel Hertenstein"
+date: "December 15, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Title
+
+Synopsis text
+
+## Data Processing
+
+### Loading the Data
+
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", "repdata%2Fdata%2FStormData.csv.bz2")
+storm_data <- read.csv("repdata%2Fdata%2FStormData.csv.bz2")
+
+## Results
