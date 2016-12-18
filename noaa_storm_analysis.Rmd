@@ -1,23 +1,185 @@
 ---
-title: "noaa_storm_analysis"
-author: "Daniel Hertenstein"
-date: "December 15, 2016"
-output: html_document
+output:
+  html_document:
+    keep_md: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache=TRUE)
 ```
 
-# Title
+# Tornados and Thunderstorm Winds are Most Important for Population Health and Economics, Respectively
 
-Synopsis text
+## Synopsis
+
+The U.S. National Oceanic and Atmospheric Administration (NOAA) keeps a storm database that tracks characteristics of major storms and weather events in the United States and includes estimates of any fatalities, injuries, and property damage. Municipalities need information to help them determine how best to allocate funds for their reactions to storms. This analysis ranks different storm events by their harm with respect to population health and economic consequences. We find that Tornados cause the most harm with respect to population health, and Thunderstorm Winds cause the greatest economic consequences.
 
 ## Data Processing
 
+### Loading the Libraries Used Throughout
+
+```{r}
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+```
+
 ### Loading the Data
 
+```{r}
 download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", "repdata%2Fdata%2FStormData.csv.bz2")
 storm_data <- read.csv("repdata%2Fdata%2FStormData.csv.bz2")
+```
+
+### Expanding the Damage Costs
+
+The data set separates damage information across two columns, a base value and an exponent value. To make analysis easier, we use the exponent column to expand the base value column into the actual value.
+
+```{r}
+storm_data[storm_data$PROPDMGEXP == 1, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 1] * 10^1
+storm_data[storm_data$PROPDMGEXP == 2, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 2] * 10^2
+storm_data[storm_data$PROPDMGEXP == 3, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 3] * 10^3
+storm_data[storm_data$PROPDMGEXP == 4, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 4] * 10^4
+storm_data[storm_data$PROPDMGEXP == 5, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 5] * 10^5
+storm_data[storm_data$PROPDMGEXP == 6, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 6] * 10^6
+storm_data[storm_data$PROPDMGEXP == 7, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 7] * 10^7
+storm_data[storm_data$PROPDMGEXP == 8, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 8] * 10^8
+storm_data[storm_data$PROPDMGEXP == 0, "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 0] * 10^10
+storm_data[storm_data$PROPDMGEXP == 'B', "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 'B'] * 10^9
+storm_data[storm_data$PROPDMGEXP == 'h', "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 'h'] * 10^2
+storm_data[storm_data$PROPDMGEXP == 'H', "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 'H'] * 10^2
+storm_data[storm_data$PROPDMGEXP == 'k', "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 'k'] * 10^3
+storm_data[storm_data$PROPDMGEXP == 'K', "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 'K'] * 10^3
+storm_data[storm_data$PROPDMGEXP == 'm', "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 'm'] * 10^6
+storm_data[storm_data$PROPDMGEXP == 'M', "PROPDMG"] <- storm_data$PROPDMG[storm_data$PROPDMGEXP == 'M'] * 10^6
+
+storm_data[storm_data$CROPDMGEXP == 2, "CROPDMG"] <- storm_data$CROPDMG[storm_data$CROPDMGEXP == 2] * 10^2
+storm_data[storm_data$CROPDMGEXP == 0, "CROPDMG"] <- storm_data$CROPDMG[storm_data$CROPDMGEXP == 0] * 10^10
+storm_data[storm_data$CROPDMGEXP == 'B', "CROPDMG"] <- storm_data$CROPDMG[storm_data$CROPDMGEXP == 'B'] * 10^9
+storm_data[storm_data$CROPDMGEXP == 'k', "CROPDMG"] <- storm_data$CROPDMG[storm_data$CROPDMGEXP == 'k'] * 10^3
+storm_data[storm_data$CROPDMGEXP == 'K', "CROPDMG"] <- storm_data$CROPDMG[storm_data$CROPDMGEXP == 'K'] * 10^3
+storm_data[storm_data$CROPDMGEXP == 'm', "CROPDMG"] <- storm_data$CROPDMG[storm_data$CROPDMGEXP == 'm'] * 10^6
+storm_data[storm_data$CROPDMGEXP == 'M', "CROPDMG"] <- storm_data$CROPDMG[storm_data$CROPDMGEXP == 'M'] * 10^6
+```
+
+### Do We Need to Fix the Event Type Column?
+
+We know from the storm data documentation https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf that there are only 48 event types that we should be considering. However, the storm data set has 985 unique event types.
+
+```{r}
+length(as.character(unique(storm_data$EVTYPE)))
+```
+
+So, do we need to fix the event type column? Maybe. But let's see if we can adequately answer our questions of interest without doing so.
 
 ## Results
+
+### Which types of events are most harmful with respect to population health?
+
+Let's group population health data by Event Type without fixing it and see what we get.
+
+```{r}
+population_health <- storm_data %>% group_by(EVTYPE) %>% summarise(fatalities=sum(FATALITIES), injuries=sum(INJURIES))
+head(population_health[order(-population_health$fatalities), ])
+head(population_health[order(-population_health$injuries), ])
+```
+
+It looks like tornados are probably the most harmful with respect to population health. But we know that typos in the EVTYPE column may be misleading us. So let's do some overly inclusive grouping to see if the other top events in these lists may actually be more harmful with respect to population health. It looks like the top candidates are events that are related to heat, flood, wind, or lightning.
+
+```{r}
+pop_health <- data.frame(type=character(6), fatalities=integer(6), injuries=integer(6), stringsAsFactors = FALSE)
+
+tornado <- grepl("tornado", population_health$EVTYPE, ignore.case = TRUE)
+pop_health$type[1] <- "Tornado"
+pop_health$fatalities[1] <- sum(population_health[tornado, "fatalities"])
+pop_health$injuries[1] <- sum(population_health[tornado, "injuries"])
+
+heat <- grepl("heat", population_health$EVTYPE, ignore.case = TRUE)
+pop_health$type[2] <- "Heat"
+pop_health$fatalities[2] <- sum(population_health[heat, "fatalities"])
+pop_health$injuries[2] <- sum(population_health[heat, "injuries"])
+
+flood <- grepl("flood", population_health$EVTYPE, ignore.case = TRUE)
+pop_health$type[3] <- "Flood"
+pop_health$fatalities[3] <- sum(population_health[flood, "fatalities"])
+pop_health$injuries[3] <- sum(population_health[flood, "injuries"])
+
+wind <- grepl("wind", population_health$EVTYPE, ignore.case = TRUE)
+pop_health$type[4] <- "Wind"
+pop_health$fatalities[4] <- sum(population_health[wind, "fatalities"])
+pop_health$injuries[4] <- sum(population_health[wind, "injuries"])
+
+lightning <- grepl("lightning", population_health$EVTYPE, ignore.case = TRUE)
+pop_health$type[5] <- "Lightning"
+pop_health$fatalities[5] <- sum(population_health[lightning, "fatalities"])
+pop_health$injuries[5] <- sum(population_health[lightning, "injuries"])
+
+other <- !(tornado | heat | flood | wind | lightning)
+pop_health$type[6] <- "Other"
+pop_health$fatalities[6] <- sum(population_health[other, "fatalities"])
+pop_health$injuries[6] <- sum(population_health[other, "injuries"])
+
+p1 <- ggplot(pop_health, aes(type, fatalities)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle=90, hjust=1))
+p2 <- ggplot(pop_health, aes(type, injuries)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle=90, hjust=1))
+grid.arrange(p1, p2, ncol=2, top="Tornados Most Harmful with Respect to Population Health")
+```
+
+The above figure shows the total fatalities and injuries for tornado events, our inclusively grouped top contenders, and all other events. Even casting a wide net for the other top contenders, tornados still have much higher fatality and injury totals.
+
+### Which types of events have the greatest economic consequences?
+
+Let's group damages data by Event Type without fixing it and see what we get.
+
+```{r}
+damages <- storm_data %>% group_by(EVTYPE) %>% summarise(property=sum(PROPDMG), crop=sum(CROPDMG))
+damages$total <- damages$property + damages$crop
+head(damages[order(-damages$property), ])
+head(damages[order(-damages$crop), ])
+head(damages[order(-damages$total), ])
+```
+
+We can make an argument here that thunderstorm winds have the greatest economic consequences. Tornados have higher crop damages, but the property damages and total damages of thunderstorm winds are significantly higher. Let's do the same overly inclusive grouping to see if the other top events in these lists may actually have the greatest economic consequences. It looks like the top candidates are events that are related to tornados, flood, and hail.
+
+```{r}
+dam <- data.frame(type=character(5), property=double(5), crop=double(5), total=double(5), stringsAsFactors = FALSE)
+
+thunderstorm_wind <- grepl("thunderstorm wind", damages$EVTYPE, ignore.case = TRUE)
+dam$type[1] <- "Thunderstorm Winds"
+dam$property[1] <- sum(damages[thunderstorm_wind, "property"])
+dam$crop[1] <- sum(damages[thunderstorm_wind, "crop"])
+dam$total[1] <- sum(damages[thunderstorm_wind, "total"])
+
+tornado <- grepl("tornado", damages$EVTYPE, ignore.case = TRUE)
+dam$type[2] <- "Tornado"
+dam$property[2] <- sum(damages[tornado, "property"])
+dam$crop[2] <- sum(damages[tornado, "crop"])
+dam$total[2] <- sum(damages[tornado, "total"])
+
+flood <- grepl("flood", damages$EVTYPE, ignore.case = TRUE)
+dam$type[3] <- "Flood"
+dam$property[3] <- sum(damages[flood, "property"])
+dam$crop[3] <- sum(damages[flood, "crop"])
+dam$total[3] <- sum(damages[flood, "total"])
+
+hail <- grepl("hail", damages$EVTYPE, ignore.case = TRUE)
+dam$type[4] <- "Hail"
+dam$property[4] <- sum(damages[hail, "property"])
+dam$crop[4] <- sum(damages[hail, "crop"])
+dam$total[4] <- sum(damages[hail, "total"])
+
+other <- !(thunderstorm_wind | tornado | flood | hail)
+dam$type[5] <- "Other"
+dam$property[5] <- sum(damages[other, "property"])
+dam$crop[5] <- sum(damages[other, "crop"])
+dam$total[5] <- sum(damages[other, "total"])
+
+p1 <- ggplot(dam, aes(type, property)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle=90, hjust=1))
+p2 <- ggplot(dam, aes(type, crop)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle=90, hjust=1))
+p3 <- ggplot(dam, aes(type, total)) + geom_bar(stat='identity') + theme(axis.text.x = element_text(angle=90, hjust=1))
+grid.arrange(p1, p2, p3, ncol=3, top="Thunderstorm Winds Have the Greatest Economic Consequences")
+```
+
+The above figure shows the total property, crop, and combined damages caused by thunderstorm winds, our inclusively grouped top contenders, and all other events. Even casting a wide net for the other top contenders, thunderstorm winds still have much higher total costs.
